@@ -181,6 +181,8 @@ p2 <- ggplot(data=top20_injuries,
       theme(legend.position="none")
 
 ggplot2.multiplot(p1, p2)
+dev.copy(jpeg,filename="plot1.jpg")
+dev.off ()
 ```
 
 The histogram ploted the top 20 consequences of natural cathastrophes in USA, divided in Injuries or Fatalities, as it's possible to see, tornados are the responsible for the highest number of both (Injury and Fatalities), but for the other events it's not the case that the higher number of injuries will produce the highest number of fatalities.
@@ -220,6 +222,10 @@ p2 <- ggplot(data=top20_CROP,
     theme(legend.position="none")
 
 ggplot2.multiplot(p1, p2)
+
+dev.copy(jpeg,filename="plot2.jpg")
+dev.off ()
+
 ```
 
 As it's possible to see from the graphs, concerning properties the main economic burden in USA is flood, while for crops is drought. But interestingly, flood is the second highest factor for crops, therefore is possible to say that in sum, flood is the main economic burden in USA when comes to natural cathastrophes. 
