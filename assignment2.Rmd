@@ -1,0 +1,225 @@
+---
+title: "assignment_2"
+author: "Marcelladane"
+date: "14 August 2017"
+output: html_document
+---
+**Economic burden of natural disasters in USA**
+
+
+##Synopsis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+##Data
+
+You can find the file and documentation in the website:
+
+https://www.coursera.org/learn/reproducible-research/peer/OMZ37/course-project-2
+
+The events in the database start in the year 1950 and end in November 2011.
+
+**PROJECT AIM**
+The data analysis aim to address the following questions:
+
+1. Across the United States, which types of events (as indicated in the *EVTYPE* variable) are most harmful with respect to population health?
+
+2. Across the United States, which types of events have the greatest economic consequences?
+
+###Notes about the environment used
+RStudio version 3.3.3
+Published in rpubs.com using Markdown and knitr
+Full project: https://github.com/marcelladane/reproducible-research-assignment-2 
+
+###Data processing
+
+Start by loading the needed packages
+```{r install packages}
+packages <- c("stringr","lubridate","sqldf","gridExtra","data.table", "reshape2", "ggplot2", "easyGgplot2", "gridExtra")
+sapply(packages, require, character.only = TRUE, quietly = TRUE)
+```
+
+First copy the url of the file, then unzip and save it in a table called "raw_data".
+
+*raw_Data* holds the raw data.
+
+Use the function head to check that the data was load properly str to check the data structure
+
+```{r download data}
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+download.file (url, destfile = "data.csv.bz2", method="auto", quiet=TRUE)
+ 
+raw_data <- read.csv("data.csv.bz2", header=TRUE, stringsAsFactors=FALSE)
+head(raw_data)
+```
+
+##The next step is to process the data
+
+Lets first check the data structure 
+
+```{r data structure}
+str(raw_data)
+```
+
+Now that we know the type of data we are working with, we can select just the columns that interest for the study. The aim for it is to decrease the size of the table.
+
+We are just interested in:
+
+Event: EVTYPE
+
+Location: STATE
+
+Consequence: FATALITIES and INJURIES
+
+Estimate about damages (property damage, crop damage) : PROPDMG, PROPDMGEXP, CROPDMG, CROPDMGEXP
+```{r data_selection}
+selected_data <- raw_data[,c("STATE", "EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP","CROPDMG", "CROPDMGEXP")]
+```
+
+Now check for missing values and how the file look like
+```{r data_check}
+sum (is.na (selected_data))
+summary(selected_data)
+str(selected_data)
+```
+
+###CROPDMGEXP and PROPDMGEXP show letters, that indicate exponentials:
+
+*First lets work out the property damage*
+```{r data_processing1}
+unique(selected_data$PROPDMGEXP)
+```
+
+H,h = hundreds = 100
+
+K,k = kilos = thousands = 1,000
+
+M,m = millions = 1,000,000
+
+B,b = billions = 1,000,000,000 and so on...
+
+###It's a good option to convert this valeus, to facilitate visualization
+```{r data_processing2}
+selected_data$PROPDMGEXP[selected_data$PROPDMGEXP %in% c("+","0","?","-","")] <- 0
+selected_data$PROPDMGEXP[selected_data$PROPDMGEXP == "K"] <- 3
+selected_data$PROPDMGEXP[selected_data$PROPDMGEXP == "M"] <- 6
+selected_data$PROPDMGEXP[selected_data$PROPDMGEXP == "m"] <- 6
+selected_data$PROPDMGEXP[selected_data$PROPDMGEXP == "H"] <- 2
+selected_data$PROPDMGEXP[selected_data$PROPDMGEXP == "h"] <- 2
+selected_data$PROPDMGEXP[selected_data$PROPDMGEXP == "B"] <- 9
+unique(selected_data$PROPDMGEXP)
+```
+
+Now we can incorporate the values
+```{r data_processing3}
+selected_data$PROPDMGEXP <- as.numeric(selected_data$PROPDMGEXP)
+selected_data$PROP <- selected_data$PROPDMG * 10^(selected_data$PROPDMGEXP)
+```
+
+*Now lets work the crops damage*
+```{r data_processing4}
+unique(selected_data$CROPDMGEXP)
+```
+
+H,h = hundreds = 100
+
+K,k = kilos = thousands = 1,000
+
+M,m = millions = 1,000,000
+
+B,b = billions = 1,000,000,000 and so on...
+
+###It's a good option to convert this valeus, to facilitate visualization
+```{r data_processing5}
+selected_data$CROPDMGEXP[selected_data$CROPDMGEXP %in% c("+","0","?","-","")] <- 0
+selected_data$CROPDMGEXP[selected_data$CROPDMGEXP == "K"] <- 3
+selected_data$CROPDMGEXP[selected_data$CROPDMGEXP == "k"] <- 3
+selected_data$CROPDMGEXP[selected_data$CROPDMGEXP == "M"] <- 6
+selected_data$CROPDMGEXP[selected_data$CROPDMGEXP == "m"] <- 6
+selected_data$CROPDMGEXP[selected_data$CROPDMGEXP == "B"] <- 9
+unique(selected_data$CROPDMGEXP)
+```
+
+Now we can incorporate the values
+```{r data_processing6}
+selected_data$CROPDMGEXP <- as.numeric(selected_data$CROPDMGEXP)
+selected_data$CROP <- selected_data$CROPDMG * 10^(selected_data$CROPDMGEXP)
+```
+
+##RESULTS
+
+**Question 1**
+*Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?*
+
+The data show a division between fatalities and injuries, the first thing to inquite is the high injuries are also the ones that caused highest fatalities. In the following plot the data will present a double graphic with injuries and fatalities divided.
+
+```{r harmful_Events}
+fatalities <- aggregate (FATALITIES~EVTYPE, selected_data, sum)
+fatalities <- fatalities [order(fatalities$FATALITIES, decreasing=TRUE),]
+top20_fatalities <- fatalities[1:20,]
+
+p1 <- ggplot(data=top20_fatalities,
+       aes(x=reorder(EVTYPE, FATALITIES), y=FATALITIES,      fill=FATALITIES)) +
+       geom_bar(stat="identity") +
+       coord_flip() +
+       ylab("Top 20 types of fatalities") +
+       xlab("Event type") +
+       theme(legend.position="none")
+
+injuries <- aggregate (INJURIES~EVTYPE, selected_data, sum)
+injuries <- injuries [order(injuries$INJURIES, decreasing=TRUE),]
+top20_injuries <- injuries[1:20,]
+
+p2 <- ggplot(data=top20_injuries,
+      aes(x=reorder(EVTYPE, INJURIES), y=INJURIES, fill=INJURIES)) +
+      geom_bar(stat="identity") +
+      coord_flip() +
+      ylab("Top 20 types of injuries") +
+      xlab("Event type") +
+      theme(legend.position="none")
+
+ggplot2.multiplot(p1, p2)
+```
+
+The histogram ploted the top 20 consequences of natural cathastrophes in USA, divided in Injuries or Fatalities, as it's possible to see, tornados are the responsible for the highest number of both (Injury and Fatalities), but for the other events it's not the case that the higher number of injuries will produce the highest number of fatalities.
+
+**Question 2**
+*2. Across the United States, which types of events have the greatest economic consequences?*
+
+To answer this question, we should go further than just property damage and also evaluate the data regarding crops. 
+
+The plot will be a double plot showing the economic burden of natural cathastrophes in USA.
+
+```{r Costs_Events}
+prop_cost <- aggregate (PROP~EVTYPE, selected_data, sum)
+prop_cost <- prop_cost [order(prop_cost$PROP, decreasing=TRUE),]
+top20_PROP <- prop_cost[1:20,]
+
+p1 <- ggplot(data=top20_PROP,
+             aes(x=reorder(EVTYPE, PROP), y=log10(PROP), fill=PROP )) +
+    geom_bar(stat="identity") +
+    coord_flip() +
+    ylim(0,15) +
+    xlab("Event type") +
+    ylab("Property damage in dollars (log10)") +
+    theme(legend.position="none")
+
+crop_cost <- aggregate (CROP~EVTYPE, selected_data, sum)
+crop_cost <- crop_cost [order(crop_cost$CROP, decreasing=TRUE),]
+top20_CROP <- crop_cost[1:20,]
+
+p2 <- ggplot(data=top20_CROP,
+             aes(x=reorder(EVTYPE, CROP), y=log10(CROP), fill=CROP)) +
+    geom_bar(stat="identity") +
+    coord_flip() + 
+    ylim(0,15) +
+    xlab("Event type") +
+    ylab("Crop damage in dollars (log10)") + 
+    theme(legend.position="none")
+
+ggplot2.multiplot(p1, p2)
+```
+
+As it's possible to see from the graphs, concerning properties the main economic burden in USA is flood, while for crops is drought. But interestingly, flood is the second highest factor for crops, therefore is possible to say that in sum, flood is the main economic burden in USA when comes to natural cathastrophes. 
